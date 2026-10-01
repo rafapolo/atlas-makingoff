@@ -50,7 +50,10 @@
   }
 
   // ---------- imagens: atlas minúsculo + páginas grandes (LRU) ----------
-  let miniBmp = null, wallC = null;
+  let miniBmp = null, wallC = null;   // wallC = parede do nível em uso (para o minimapa)
+  // níveis de parede composta: micro (4×6 por capa, ~0,4 MB, aparece primeiro) e mini (16×24, ~5 MB, só ao aproximar)
+  const LV = { micro: { bmp: null, px: null, w: 0, canvas: null, dirty: true }, mini: { bmp: null, px: null, w: 0, canvas: null, dirty: true } };
+  const markDirty = () => { LV.micro.dirty = LV.mini.dirty = true; };
   const pages = new Map(); const MAXP = COARSE ? 4 : 10; let frame = 0, inflight = 0;
   function page(p) {
     let e = pages.get(p);
@@ -67,28 +70,46 @@
     e.used = frame; return e;
   }
 
-  // composição da parede em miniatura (nível "de longe"): refeita só quando muda a ordem, o formato ou o tema (o filtro é uma máscara por cima)
-  let wallDirty = true;
-  // pixels do atlas minúsculo em memória (Uint32 RGBA): copiar blocos 16×24 aqui é ~10× mais rápido que 33 mil drawImage
-  let miniPx = null, miniW = 0;
+  // composição da parede (por nível): refeita só quando muda a ordem, o formato ou o tema (o filtro é uma máscara por cima)
+  // pixels do atlas do nível em memória (Uint32 RGBA): copiar blocos aqui é ~10× mais rápido que 33 mil drawImage
   const abgr = (c) => { const [r, g, b] = rgb(c); return (255 << 24) | (b << 16) | (g << 8) | r; };
-  function composeWall() {
-    if (!miniBmp) { wallDirty = true; return; }
-    if (!miniPx) { const c = document.createElement("canvas"); c.width = miniW = miniBmp.width; c.height = miniBmp.height; const cx = c.getContext("2d", { willReadFrequently: true }); cx.drawImage(miniBmp, 0, 0); miniPx = new Uint32Array(cx.getImageData(0, 0, c.width, c.height).data.buffer); }
-    const [mw, mh] = D.mini.tile, mc = D.mini.cols, WW = wall.cols * mw, WH = wall.rows * mh, out = new Uint32Array(WW * WH);
+  function composeLevel(name) {
+    const L = LV[name], spec = D[name]; if (!L.bmp || !spec) return null;
+    if (!L.px) { const c = document.createElement("canvas"); c.width = L.w = L.bmp.width; c.height = L.bmp.height; const cx = c.getContext("2d", { willReadFrequently: true }); cx.drawImage(L.bmp, 0, 0); L.px = new Uint32Array(cx.getImageData(0, 0, c.width, c.height).data.buffer); }
+    const [mw, mh] = spec.tile, mc = spec.cols, WW = wall.cols * mw, WH = wall.rows * mh, out = new Uint32Array(WW * WH), src = L.px, sw = L.w;
     out.fill(abgr(colors.bg));
-    const panel = abgr(colors.panel), seedC = {}; for (const k of SEED) seedC[k] = abgr(colors[k]);
+    const panel = abgr(colors.panel), seedC = {}, bar = Math.max(1, Math.round(mh / 12)); for (const k of SEED) seedC[k] = abgr(colors[k]);
     for (let k = 0; k < N; k++) {
       const i = layoutOrder[k], dx = (k % wall.cols) * mw, dy = ((k / wall.cols) | 0) * mh;
       if (C.f[i] & 1) {
         const sx = (i % mc) * mw, sy = ((i / mc) | 0) * mh;
-        for (let r = 0; r < mh; r++) { const so = (sy + r) * miniW + sx, d0 = (dy + r) * WW + dx; for (let c = 0; c < mw; c++) out[d0 + c] = miniPx[so + c]; }
+        for (let r = 0; r < mh; r++) { const so = (sy + r) * sw + sx, d0 = (dy + r) * WW + dx; for (let c = 0; c < mw; c++) out[d0 + c] = src[so + c]; }
       } else for (let r = 0; r < mh; r++) { const d0 = (dy + r) * WW + dx; for (let c = 0; c < mw; c++) out[d0 + c] = panel; }
-      const sc = seedC[seedClass[i]]; for (let r = mh - 2; r < mh; r++) { const d0 = (dy + r) * WW + dx; for (let c = 0; c < mw; c++) out[d0 + c] = sc; }   // traço de saúde
+      const sc = seedC[seedClass[i]]; for (let r = mh - bar; r < mh; r++) { const d0 = (dy + r) * WW + dx; for (let c = 0; c < mw; c++) out[d0 + c] = sc; }   // traço de saúde
     }
-    wallC ??= document.createElement("canvas"); wallC.width = WW; wallC.height = WH;
-    wallC.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(out.buffer), WW, WH), 0, 0);
-    wallDirty = false; buildMinimap(); updateMask();
+    L.canvas ??= document.createElement("canvas"); L.canvas.width = WW; L.canvas.height = WH;
+    L.canvas.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(out.buffer), WW, WH), 0, 0);
+    L.dirty = false; return L.canvas;
+  }
+  /** parede para o zoom atual: micro de longe, mini quando a capa passa de ~12 px (pedindo o mini sob demanda) */
+  function wallFor(tileH) {
+    const want = tileH >= 12 ? "mini" : "micro";
+    if (want === "mini") loadMini();
+    for (const name of want === "mini" ? ["mini", "micro"] : ["micro", "mini"]) {
+      const L = LV[name]; if (!L.bmp) continue;
+      if (L.dirty) composeLevel(name);
+      if (L.canvas) { if (wallC !== LV.micro.canvas && LV.micro.canvas) wallC = LV.micro.canvas; else wallC ??= L.canvas; return { canvas: L.canvas, s: D[name].tile[0] / PW }; }
+    }
+    return null;
+  }
+  // compat: chamadas antigas
+  function composeWall() { if (LV.micro.bmp) composeLevel("micro"); if (LV.mini.bmp) composeLevel("mini"); wallC = LV.micro.canvas || LV.mini.canvas; buildMinimap(); updateMask(); }
+
+  const fetchBitmap = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(r.status); return r.blob(); }).then((b) => createImageBitmap(b));
+  let miniReq = null;
+  function loadMini() {
+    if (miniReq || !D) return; miniReq = fetchBitmap(`mini.webp?v=${D.generated}`)
+      .then((bmp) => { LV.mini.bmp = miniBmp = bmp; LV.mini.dirty = true; kick(); }).catch(() => { miniReq = null; });
   }
 
   // máscara do filtro: 1 pixel por capa (cols × rows). Capas que NÃO casam recebem a cor do fundo quase opaca; desenhada por cima da parede com UM drawImage.
@@ -168,7 +189,7 @@
     if (C.f[i] & 1) {
       const e = page(Math.floor(i / D.per)), pos = i % D.per;
       if (e?.bmp) ctx.drawImage(e.bmp, (pos % PC) * D.tile[0], Math.floor(pos / PC) * D.tile[1], D.tile[0], D.tile[1], x, y, w, h);
-      else if (miniBmp) ctx.drawImage(miniBmp, (i % D.mini.cols) * D.mini.tile[0], ((i / D.mini.cols) | 0) * D.mini.tile[1], D.mini.tile[0], D.mini.tile[1], x, y, w, h);   // enquanto a página carrega
+      else if (miniBmp || LV.micro.bmp) { const sp = miniBmp ? D.mini : D.micro, bm = miniBmp || LV.micro.bmp; ctx.drawImage(bm, (i % sp.cols) * sp.tile[0], ((i / sp.cols) | 0) * sp.tile[1], sp.tile[0], sp.tile[1], x, y, w, h); }   // enquanto a página carrega
       else { ctx.fillStyle = colors.line; ctx.fillRect(x, y, w, h); }
     } else { // sem capa: o título faz o papel da imagem
       const fs = Math.max(8, Math.round(w / 6.5)); ctx.font = `${fs}px ${FONT}`; ctx.textBaseline = "top";
@@ -188,11 +209,11 @@
     ctx.fillStyle = colors.panel; ctx.fillRect((0 - wx0) * k - 6, (0 - wy0) * k - 6, wall.w * k + 12, wall.h * k + 12);
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
     if (PH * k < LOD_PX) { // de longe: a parede inteira já composta em miniatura (1 só drawImage, qualquer que seja o nº de capas)
-      if (wallDirty) composeWall();
-      if (wallC) {
-        const cx0 = Math.max(0, wx0), cx1 = Math.min(wall.w, wx1), cy0 = Math.max(0, wy0), cy1 = Math.min(wall.h, wy1), s = D.mini.tile[0] / PW;
+      const lv = wallFor(PH * k);
+      if (lv) {
+        const cx0 = Math.max(0, wx0), cx1 = Math.min(wall.w, wx1), cy0 = Math.max(0, wy0), cy1 = Math.min(wall.h, wy1), s = lv.s;
         if (cx1 > cx0 && cy1 > cy0) {
-          ctx.drawImage(wallC, cx0 * s, cy0 * s, (cx1 - cx0) * s, (cy1 - cy0) * s, (cx0 - wx0) * k, (cy0 - wy0) * k, (cx1 - cx0) * k, (cy1 - cy0) * k);
+          ctx.drawImage(lv.canvas, cx0 * s, cy0 * s, (cx1 - cx0) * s, (cy1 - cy0) * s, (cx0 - wx0) * k, (cy0 - wy0) * k, (cx1 - cx0) * k, (cy1 - cy0) * k);
           if (nMatch < N && maskC) { ctx.imageSmoothingEnabled = false; ctx.drawImage(maskC, cx0 / PW, cy0 / PH, (cx1 - cx0) / PW, (cy1 - cy0) / PH, (cx0 - wx0) * k, (cy0 - wy0) * k, (cx1 - cx0) * k, (cy1 - cy0) * k); ctx.imageSmoothingEnabled = true; }
         }
       }
@@ -303,7 +324,8 @@
   function renderFilters() {
     const keepScroll = filtersEl.parentElement.scrollTop, focus = document.activeElement?.dataset?.search;
     // seeders: as cinco cores numa linha só (nome curto + contagem; a descrição completa fica no title)
-    const seed = `<section class="sec"><h2>Seeders</h2><div class="seedrow">${SEED.map((k) => `<button class="seedbtn" type="button" data-seed="${k}" aria-pressed="${S.seed.has(k)}" title="${SEEDLAB[k]} · ${fmt(counts.seed[SEEDI[k]])} filmes" aria-label="${SEEDLAB[k]}: ${fmt(counts.seed[SEEDI[k]])} filmes"><i style="background:${colors[k]}"></i><span>${SEEDNAME[k]}</span><small>${short(counts.seed[SEEDI[k]])}</small></button>`).join("")}</div></section>`;
+    const seedWhen = D.seedsAt ? new Date(D.seedsAt).toLocaleDateString("pt-BR") : null;
+    const seed = `<section class="sec"><h2>Seeders</h2><div class="seedrow">${SEED.map((k) => `<button class="seedbtn" type="button" data-seed="${k}" aria-pressed="${S.seed.has(k)}" title="${SEEDLAB[k]} · ${fmt(counts.seed[SEEDI[k]])} filmes" aria-label="${SEEDLAB[k]}: ${fmt(counts.seed[SEEDI[k]])} filmes"><i style="background:${colors[k]}"></i><span>${SEEDNAME[k]}</span><small>${short(counts.seed[SEEDI[k]])}</small></button>`).join("")}</div><p class="legend">A cor sob cada capa é quantas pessoas estão compartilhando o arquivo agora (seeders)${seedWhen ? `, medido nos trackers em ${seedWhen}` : ""}. Verde: 5 ou mais. Amarelo: 2 a 4. Laranja: só 1, o filme pode sumir. Vermelho: ninguém, provavelmente não baixa. Cinza: sem dados, em geral porque o tópico não tem torrent.</p></section>`;
     const decs = []; for (let d = Math.floor(D._ymin / 10) * 10; d <= Math.floor(D._ymax / 10) * 10; d += 10) decs.push(d);
     const mx = Math.max(1, ...decs.map((d) => counts.years.get(d) ?? 0));
     const year = `<section class="sec"><h2>Ano</h2><div class="hist">${decs.map((d) => `<button type="button" data-dec="${d}" title="${d}s · ${fmt(counts.years.get(d) ?? 0)} filmes" aria-label="Década de ${d}" aria-pressed="${S.y0 === d && S.y1 === d + 9}" style="height:${Math.max(4, Math.round(54 * (counts.years.get(d) ?? 0) / mx))}px"></button>`).join("")}</div>
@@ -328,7 +350,7 @@
     el._chips = chips; $("#fit-matches").hidden = !chips.length;
   }
   function renderCount() {
-    $("#count").innerHTML = `<b>${fmt(nMatch)}</b> de ${fmt(N)} filmes${nMatch ? `<span class="hide-narrow"> · ${Math.round((100 * withSeedN) / nMatch)}% com seeders</span>` : ""}`;
+    $("#count").innerHTML = `<b>${fmt(nMatch)}</b> de ${fmt(N)} filmes${nMatch && !S.seed.size ? `<span class="hide-narrow"> · ${Math.round((100 * withSeedN) / nMatch)}% com seeders</span>` : ""}`;
     $("#empty").hidden = nMatch > 0;
   }
 
@@ -343,7 +365,7 @@
     const paint = () => {
       const x = cn.getContext("2d"); x.imageSmoothingQuality = "high"; const p = Math.floor(i / D.per), pos = i % D.per, e = pages.get(p);
       if (e?.bmp) x.drawImage(e.bmp, (pos % PC) * D.tile[0], Math.floor(pos / PC) * D.tile[1], D.tile[0], D.tile[1], 0, 0, 200, 300);
-      else if (miniBmp) x.drawImage(miniBmp, (i % D.mini.cols) * D.mini.tile[0], ((i / D.mini.cols) | 0) * D.mini.tile[1], D.mini.tile[0], D.mini.tile[1], 0, 0, 200, 300);
+      else if (miniBmp || LV.micro.bmp) { const sp = miniBmp ? D.mini : D.micro, bm = miniBmp || LV.micro.bmp; x.drawImage(bm, (i % sp.cols) * sp.tile[0], ((i / sp.cols) | 0) * sp.tile[1], sp.tile[0], sp.tile[1], 0, 0, 200, 300); }
     };
     paint(); page(Math.floor(i / D.per)); let tries = 0; const t = setInterval(() => { paint(); if (pages.get(Math.floor(i / D.per))?.bmp || ++tries > 20 || detailId !== i) clearInterval(t); }, 400);
     return cn;
@@ -377,13 +399,19 @@
     detailEl.querySelector(".dbody").scrollTop = 0;
     const im = detailEl.querySelector("img.cover");
     if (im) { const fb = () => { if (detailId === i) im.replaceWith(coverFromAtlas(i)); }; im.addEventListener("error", fb, { once: true }); if (im.complete && !im.naturalWidth) fb(); }
+    const noLinks = (msg) => { if (detailId === i && !detailEl.querySelector(".nolink")) $("#dl-links").insertAdjacentHTML("beforebegin", `<p class="nolink">${msg}</p>`); };
     try { // magnet e anexos vêm do servidor sob demanda (não vão no atlas-data.json)
-      const r = await fetch(`api/filme/${C.id[i]}`); if (!r.ok || detailId !== i) return; const d = await r.json(); if (detailId !== i) return;
+      const r = await fetch(`api/filme/${C.id[i]}`); if (detailId !== i) return;
+      if (!r.ok) { noLinks("Esta versão online não publica magnets nem anexos. Abra o tópico no fórum para baixar."); return; }
+      const d = await r.json(); if (detailId !== i) return;
+      const tor = (d.attachments || []).find((a) => a.kind === "torrent");
+      if (tor) $("#dl-links").insertAdjacentHTML("afterbegin", `<a class="torrentfile" href="${esc(tor.url)}" download>Baixar .torrent</a>`);
       if (d.magnet_link) $("#dl-links").insertAdjacentHTML("afterbegin", `<a class="magnet" href="${esc(d.magnet_link)}"><span aria-hidden="true">⤓</span> Magnet</a>`);
+      if (!d.magnet_link && !tor) noLinks("Este tópico não tem arquivo .torrent. Veja no fórum se há outro link.");
       const att = (d.attachments || []).filter((a) => a.kind !== "torrent").slice(0, 12);
       $("#dl-files").innerHTML = att.map((a) => `<li><a href="${esc(a.url)}" title="${esc(a.filename)}">${esc(a.filename)}</a><span class="k">${esc(a.kind || "")}${a.size ? ` · ${fmtB(a.size)}` : ""}</span></li>`).join("");
       $("#dl-att").hidden = !att.length;
-    } catch { /* atlas aberto como arquivo estático: sem magnet */ }
+    } catch { noLinks("Esta versão online não publica magnets nem anexos. Abra o tópico no fórum para baixar."); }
   }
   const openSheet = () => { document.body.classList.add("show-filters"); if (panelDirty) renderPanel(); }, closeSheet = () => document.body.classList.remove("show-filters");
 
@@ -456,7 +484,7 @@
     cancelAnimationFrame(refreshJob);
     refreshJob = requestAnimationFrame(() => { if (panelVisible()) renderPanel(); else { panelDirty = true; renderActive(); } saveHash(); });   // 2) painel logo depois (no celular, só se aberto)
   };
-  const relayout = () => { computeWall(); resize(); fit(); if (selI >= 0) focusFilm(selI); wallDirty = true; composeWall(); updateMask(); kick(); };
+  const relayout = () => { computeWall(); resize(); fit(); if (selI >= 0) focusFilm(selI); markDirty(); composeWall(); updateMask(); kick(); };
   const toggle = (set, v) => (set.has(v) ? set.delete(v) : set.add(v));
 
   filtersEl.addEventListener("click", (e) => {
@@ -510,13 +538,15 @@
 
   // ---------- início ----------
   (async () => {
-    readColors(); matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { readColors(); wallDirty = true; kick(); });
-    new MutationObserver(() => { readColors(); wallDirty = true; kick(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    readColors(); matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { readColors(); markDirty(); kick(); });
+    new MutationObserver(() => { readColors(); markDirty(); kick(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    const microP = fetchBitmap(`micro.webp?v=${V}`).catch(() => null);   // em paralelo com os dados
     D = await (await fetch(`atlas-data.json?v=${V}`)).json(); C = D.cols; N = C.id.length; PC = D.gridCols || D.page / D.tile[0];
     const ys = C.y.filter(Boolean); D._ymin = Math.min(...ys); D._ymax = Math.max(...ys);
     classify(); loadHash(); compute(); computeWall(); $("#loading").hidden = true; resize(); fit(); renderActive(); renderFilters(); renderCount(); kick();
     if (S.pendingFilm) { const i = C.id.indexOf(S.pendingFilm); if (i >= 0) selectFilm(i); }
-    fetch(`mini.webp?v=${D.generated}`).then((r) => r.blob()).then((b) => createImageBitmap(b)).then((bmp) => { miniBmp = bmp; wallDirty = true; composeWall(); kick(); }).catch(() => {});
+    microP.then((bmp) => { if (bmp) { LV.micro.bmp = bmp; LV.micro.dirty = true; composeWall(); kick(); } else loadMini(); });
+    if (!COARSE) (window.requestIdleCallback || setTimeout)(() => loadMini(), { timeout: 4000 });   // desktop: pré-carrega o mini depois de mostrar a parede
     if (document.fonts?.ready) document.fonts.ready.then(kick);
   })().catch((e) => { $("#loading").textContent = "Não foi possível carregar o atlas: " + e.message; });
 })();

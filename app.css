@@ -92,6 +92,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, canvas:focus-vi
 .seedbtn[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .seedbtn:hover { background: var(--panel); }
 
+.legend { margin: 8px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+.detail .nolink { margin: 0; font-size: 12.5px; color: var(--muted); background: var(--raise); border: 1px dashed var(--line); border-radius: 8px; padding: 8px 10px; }
+.detail .links .torrentfile { text-align: center; }
 .hist { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; align-items: end; gap: 3px; height: 54px; margin: 4px 0 6px; }
 .hist button { display: block; width: 100%; background: var(--line); border: 0; border-radius: 2px 2px 0 0; cursor: pointer; padding: 0; min-height: 4px; }
 .hist button[aria-pressed="true"] { background: var(--accent); }
