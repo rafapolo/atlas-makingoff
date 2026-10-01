@@ -358,22 +358,31 @@
   async function showDetail(i) {
     detailId = i; const sc = seedClass[i], lc = C.lc[i];
     const tags = (g) => C[g][i].map((x) => `<button class="tag" type="button" data-g="${g}" data-i="${x}">${esc(D.dict[g][0][x])}</button>`).join("") || "—";
-    document.body.classList.add("has-detail"); detailEl.hidden = false; detailEl.scrollTop = 0;
-    detailEl.innerHTML = `<button class="ghost x" type="button" id="close-detail" aria-label="Fechar">Fechar ×</button>
-      <div class="head">${C.f[i] & 1 ? `<img class="cover" src="files/capas/${C.id[i]}.${EXT(i)}" alt="Capa de ${esc(C.t[i])}">` : ""}
-        <div class="titles"><h3>${esc(C.t[i])}</h3>${C.o[i] ? `<p class="orig">${esc(C.o[i])}</p>` : ""}</div></div>
-      <dl><dt>Ano</dt><dd>${C.y[i] || "—"}</dd><dt>Países</dt><dd>${tags("c")}</dd><dt>Direção</dt><dd>${tags("d")}</dd><dt>Gêneros</dt><dd>${tags("g")}</dd><dt>Idiomas</dt><dd>${tags("l")}</dd>
-      <dt>Seeders</dt><dd><span class="health"><i style="background:${colors[sc]}"></i>${C.s[i] === null ? "sem dados" : `${C.s[i]} seeders${lc !== null ? ` · ${lc} leechers` : ""}`}</span></dd>
-      <dt>Arquivo</dt><dd>${C.z[i] ? (C.z[i] >= 1024 ? (C.z[i] / 1024).toFixed(1) + " GB" : C.z[i] + " MB") : "—"}${C.n[i] > 1 ? ` · ${C.n[i]} arquivos` : ""}</dd>
-      <dt>Postado por</dt><dd>${C.u[i] >= 0 ? `<button class="tag" type="button" data-g="u" data-i="${C.u[i]}">${esc(D.dict.u[0][C.u[i]])}</button>` : "—"}</dd></dl>
-      <div class="links" id="dl-links"><a href="https://www.makingoff.org/topicos/${C.id[i]}/" target="_blank" rel="noopener">Tópico no fórum</a>${C.im[i] ? `<a href="https://www.imdb.com/title/${C.im[i]}/" target="_blank" rel="noopener">IMDb</a>` : ""}</div>
-      <ul class="files" id="dl-files"></ul>`;
+    const fmtMB = (mb) => (mb >= 1024 ? (mb / 1024).toFixed(1).replace(".", ",") + " GB" : mb + " MB");
+    const fmtB = (b) => (b >= 1048576 ? (b / 1048576).toFixed(1).replace(".", ",") + " MB" : b >= 1024 ? Math.round(b / 1024) + " KB" : b + " B");
+    const row = (label, html) => `<dt>${label}</dt><dd>${html}</dd>`;
+    const seedTxt = C.s[i] === null ? "sem dados" : `<b>${C.s[i]}</b> seeder${C.s[i] === 1 ? "" : "s"}${lc !== null ? ` · ${lc} leecher${lc === 1 ? "" : "s"}` : ""}`;
+    document.body.classList.add("has-detail"); detailEl.hidden = false;
+    // o botão fechar fica fora da área que rola (sempre visível); o conteúdo rola em .dbody
+    detailEl.innerHTML = `<button class="x" type="button" id="close-detail" aria-label="Fechar" title="Fechar (Esc)"><span aria-hidden="true">×</span></button>
+      <div class="dbody">
+      <div class="head">${C.f[i] & 1 ? `<img class="cover" src="files/capas/${C.id[i]}.${EXT(i)}" alt="Capa de ${esc(C.t[i])}" width="200" height="300">` : ""}
+        <div class="titles"><h3>${esc(C.t[i])}</h3>${C.o[i] ? `<p class="orig">${esc(C.o[i])}</p>` : ""}</div>
+        <div class="facts">${C.y[i] ? `<span class="year">${C.y[i]}</span>` : ""}<span class="health" title="Saúde do torrent"><i style="background:var(--${sc})"></i>${seedTxt}</span>${C.z[i] ? `<span class="size">${fmtMB(C.z[i])}${C.n[i] > 1 ? ` · ${C.n[i]} arq.` : ""}</span>` : ""}</div></div>
+      <div class="links" id="dl-links"><a class="topic" href="https://www.makingoff.org/topicos/${C.id[i]}/" target="_blank" rel="noopener">Tópico no fórum</a>${C.im[i] ? `<a href="https://www.imdb.com/title/${C.im[i]}/" target="_blank" rel="noopener">IMDb</a>` : ""}</div>
+      <dl>${row("Países", tags("c"))}${row("Direção", tags("d"))}${row("Gêneros", tags("g"))}${row("Idiomas", tags("l"))}
+      ${row("Postado por", C.u[i] >= 0 ? `<button class="tag" type="button" data-g="u" data-i="${C.u[i]}">${esc(D.dict.u[0][C.u[i]])}</button>` : "—")}</dl>
+      <section class="att" id="dl-att" hidden><h4>Anexos</h4><ul class="files" id="dl-files"></ul></section>
+      </div>`;
+    detailEl.querySelector(".dbody").scrollTop = 0;
     const im = detailEl.querySelector("img.cover");
     if (im) { const fb = () => { if (detailId === i) im.replaceWith(coverFromAtlas(i)); }; im.addEventListener("error", fb, { once: true }); if (im.complete && !im.naturalWidth) fb(); }
     try { // magnet e anexos vêm do servidor sob demanda (não vão no atlas-data.json)
       const r = await fetch(`api/filme/${C.id[i]}`); if (!r.ok || detailId !== i) return; const d = await r.json(); if (detailId !== i) return;
-      if (d.magnet_link) $("#dl-links").insertAdjacentHTML("afterbegin", `<a class="magnet" href="${esc(d.magnet_link)}">Magnet</a>`);
-      $("#dl-files").innerHTML = (d.attachments || []).filter((a) => a.kind !== "torrent").slice(0, 12).map((a) => `<li><a href="${esc(a.url)}">${esc(a.filename)}</a> <span style="color:var(--muted)">${a.kind}</span></li>`).join("");
+      if (d.magnet_link) $("#dl-links").insertAdjacentHTML("afterbegin", `<a class="magnet" href="${esc(d.magnet_link)}"><span aria-hidden="true">⤓</span> Magnet</a>`);
+      const att = (d.attachments || []).filter((a) => a.kind !== "torrent").slice(0, 12);
+      $("#dl-files").innerHTML = att.map((a) => `<li><a href="${esc(a.url)}" title="${esc(a.filename)}">${esc(a.filename)}</a><span class="k">${esc(a.kind || "")}${a.size ? ` · ${fmtB(a.size)}` : ""}</span></li>`).join("");
+      $("#dl-att").hidden = !att.length;
     } catch { /* atlas aberto como arquivo estático: sem magnet */ }
   }
   const openSheet = () => { document.body.classList.add("show-filters"); if (panelDirty) renderPanel(); }, closeSheet = () => document.body.classList.remove("show-filters");
