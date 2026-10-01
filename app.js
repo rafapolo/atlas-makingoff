@@ -339,11 +339,11 @@
   function focusFilm(i) { const kk = posOf[i]; goal.k = clamp(Math.max(goal.k, 150 / PH), fitK * 0.7, K_MAX); goal.x = (kk % wall.cols) * PW + PW / 2 - detailShift() / goal.k; goal.y = ((kk / wall.cols) | 0) * PH + PH / 2; velocity.x = velocity.y = 0; }
   /** capa do cartão quando não há arquivo grande (site público): a miniatura do atlas ampliada; refina quando a página de sprites carrega */
   function coverFromAtlas(i) {
-    const cn = document.createElement("canvas"); cn.className = "cover"; cn.width = 128; cn.height = 192; cn.setAttribute("role", "img"); cn.setAttribute("aria-label", `Capa de ${C.t[i]}`);
+    const cn = document.createElement("canvas"); cn.className = "cover"; cn.width = 200; cn.height = 300; cn.setAttribute("role", "img"); cn.setAttribute("aria-label", `Capa de ${C.t[i]}`);
     const paint = () => {
       const x = cn.getContext("2d"); x.imageSmoothingQuality = "high"; const p = Math.floor(i / D.per), pos = i % D.per, e = pages.get(p);
-      if (e?.bmp) x.drawImage(e.bmp, (pos % PC) * D.tile[0], Math.floor(pos / PC) * D.tile[1], D.tile[0], D.tile[1], 0, 0, 128, 192);
-      else if (miniBmp) x.drawImage(miniBmp, (i % D.mini.cols) * D.mini.tile[0], ((i / D.mini.cols) | 0) * D.mini.tile[1], D.mini.tile[0], D.mini.tile[1], 0, 0, 128, 192);
+      if (e?.bmp) x.drawImage(e.bmp, (pos % PC) * D.tile[0], Math.floor(pos / PC) * D.tile[1], D.tile[0], D.tile[1], 0, 0, 200, 300);
+      else if (miniBmp) x.drawImage(miniBmp, (i % D.mini.cols) * D.mini.tile[0], ((i / D.mini.cols) | 0) * D.mini.tile[1], D.mini.tile[0], D.mini.tile[1], 0, 0, 200, 300);
     };
     paint(); page(Math.floor(i / D.per)); let tries = 0; const t = setInterval(() => { paint(); if (pages.get(Math.floor(i / D.per))?.bmp || ++tries > 20 || detailId !== i) clearInterval(t); }, 400);
     return cn;

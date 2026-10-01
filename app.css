@@ -100,8 +100,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, canvas:focus-vi
 .yearrow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
 
 .detail { padding: 14px; display: grid; gap: 10px; align-content: start; background: var(--panel); }
-.detail .head { display: flex; gap: 12px; align-items: flex-start; }
-.detail .cover { display: block; flex: none; width: 64px; height: 96px; object-fit: cover; background: var(--bg); border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,.4); }   /* mesmo tamanho do thumb do atlas */
+.detail .head { display: grid; gap: 10px; justify-items: start; }
+.detail .cover { display: block; width: 200px; height: 300px; max-width: 100%; object-fit: cover; background: var(--bg); border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
 .detail .titles { min-width: 0; }
 .detail h3 { font: 700 20px/1.15 var(--display); margin: 0; letter-spacing: -.01em; }
 .detail .orig { color: var(--muted); margin: -6px 0 0; }
