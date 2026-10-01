@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1216">
+<title>Acervo MakingOff — Atlas</title>
+<meta name="description" content="Atlas com as capas de todos os filmes do Acervo MakingOff: filtre por país, diretor, seeders e mais.">
+<link rel="icon" href="img/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="app.css?v=1790850907886">
+<meta name="robots" content="noindex">
+</head>
+<body>
+<header class="top">
+  <h1 class="brand">Acervo <span class="heart">❤</span> MakingOff <small>atlas</small></h1>
+  <span id="count" class="count" aria-live="polite"></span>
+  <input id="q" type="search" placeholder="Buscar título, original ou diretor" aria-label="Buscar" autocomplete="off" enterkeyhint="search">
+  <button id="toggle-filters" class="ghost only-narrow" type="button">Filtros <b id="nfilters"></b></button>
+</header>
+
+<main class="layout">
+  <aside id="detail" class="detail" aria-label="Detalhes do filme" hidden></aside>
+  <section class="grid" id="grid" aria-label="Parede de capas">
+    <canvas id="cv" role="img" aria-label="Parede com as capas de todos os filmes. Arraste para mover; roda do mouse ou pinça para aproximar."></canvas>
+    <div id="tip" class="tip" hidden></div>
+    <div id="empty" class="empty" hidden>Nenhum filme com esses filtros.<br><button id="clear-empty" class="ghost" type="button">Limpar filtros</button></div>
+    <div id="loading" class="loading">Carregando o atlas…</div>
+    <div id="minimap" class="minimap" hidden title="Minimapa: clique ou arraste para navegar"><canvas id="mm"></canvas><div id="mmv" class="vp"></div></div>
+    <div class="hud" role="group" aria-label="Zoom">
+      <button id="z-out" type="button" aria-label="Afastar">−</button>
+      <span id="zoomlab" class="zoomlab" aria-live="off" title="Tamanho da capa (100% = 64×96 px)">–</span>
+      <button id="z-in" type="button" aria-label="Aproximar">+</button>
+      <button id="z-fit" type="button" aria-label="Enquadrar tudo" title="Enquadrar tudo">⤢</button>
+      <button id="fit-matches" type="button" aria-label="Enquadrar os resultados do filtro" title="Enquadrar os resultados" hidden>◎</button>
+    </div>
+  </section>
+
+  <div id="backdrop" class="backdrop"></div>
+  <aside id="panel" class="panel" aria-label="Filtros e detalhes">
+    <div class="sheet-head"><span class="grab" aria-hidden="true"></span><button id="close-sheet" class="ghost" type="button">Fechar ×</button></div>
+    <section class="sec activesec" id="activesec" hidden><h2>Filtros ativos</h2><div id="active" class="active"></div></section>
+    <section class="sec view">
+      <h2>Parede</h2>
+      <div class="viewrow">
+        <label>Ordem
+          <select id="sort" aria-label="Ordenar a parede">
+            <option value="year_desc">Ano ↓ (mais novos)</option><option value="year_asc">Ano ↑ (mais antigos)</option>
+            <option value="seeds">Mais seeders</option><option value="size">Maior arquivo</option>
+            <option value="title">Título A–Z</option><option value="recent">Mais recentes no fórum</option><option value="random">Aleatório</option>
+          </select>
+        </label>
+        <label>Formato
+          <select id="aspect" aria-label="Formato da parede">
+            <option value="cinema">Cinema 2,39:1</option><option value="wide">Widescreen 16:9</option><option value="classic">Clássico 4:3</option>
+          </select>
+        </label>
+      </div>
+    </section>
+    <div id="filters"></div>
+  </aside>
+</main>
+<script src="app.js?v=1790850907886"></script>
+</body>
+</html>
