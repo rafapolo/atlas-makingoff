@@ -355,7 +355,7 @@
   }
 
   // ---------- detalhes ----------
-  const detailEl = $("#detail"); let detailId = -1;
+  const detailEl = $("#detail"); let detailId = -1; const magShards = {};
   const EXT = (i) => D.exts[C.cx[i]] || "webp";
   const detailShift = () => (matchMedia("(max-width: 860px)").matches ? 0 : 160);   // metade da largura do cartão (320 px)
   function focusFilm(i) { const kk = posOf[i]; goal.k = clamp(Math.max(goal.k, 150 / PH), fitK * 0.7, K_MAX); goal.x = (kk % wall.cols) * PW + PW / 2 - detailShift() / goal.k; goal.y = ((kk / wall.cols) | 0) * PH + PH / 2; velocity.x = velocity.y = 0; }
@@ -399,10 +399,20 @@
     detailEl.querySelector(".dbody").scrollTop = 0;
     const im = detailEl.querySelector("img.cover");
     if (im) { const fb = () => { if (detailId === i) im.replaceWith(coverFromAtlas(i)); }; im.addEventListener("error", fb, { once: true }); if (im.complete && !im.naturalWidth) fb(); }
+    // site estático (sem API): magnet a partir de magnets/m<N>.json (hash + nome) e dos trackers vivos publicados junto
+    const staticLinks = async () => {
+      const sh = Math.floor(i / 1024), j = await (magShards[sh] ??= fetch(`magnets/m${sh}.json?v=${V}`).then((r) => (r.ok ? r.json() : null)).catch(() => null));
+      if (detailId !== i) return;
+      if (!j) { noLinks("Não foi possível carregar o magnet. Abra o tópico no fórum para baixar."); return; }
+      const e = j.items[i - sh * j.shard];
+      if (!e) { noLinks("Este tópico não tem arquivo .torrent. Veja no fórum se há outro link."); return; }
+      const mag = `magnet:?xt=urn:btih:${e[0]}&dn=${encodeURIComponent(e[1] || C.t[i])}` + j.trackers.map((t) => `&tr=${encodeURIComponent(t)}`).join("");
+      $("#dl-links").insertAdjacentHTML("afterbegin", `<a class="magnet" href="${esc(mag)}"><span aria-hidden="true">⤓</span> Magnet</a>`);
+    };
     const noLinks = (msg) => { if (detailId === i && !detailEl.querySelector(".nolink")) $("#dl-links").insertAdjacentHTML("beforebegin", `<p class="nolink">${msg}</p>`); };
     try { // magnet e anexos vêm do servidor sob demanda (não vão no atlas-data.json)
       const r = await fetch(`api/filme/${C.id[i]}`); if (detailId !== i) return;
-      if (!r.ok) { noLinks("Esta versão online não publica magnets nem anexos. Abra o tópico no fórum para baixar."); return; }
+      if (!r.ok) { await staticLinks(); return; }
       const d = await r.json(); if (detailId !== i) return;
       const tor = (d.attachments || []).find((a) => a.kind === "torrent");
       if (tor) $("#dl-links").insertAdjacentHTML("afterbegin", `<a class="torrentfile" href="${esc(tor.url)}" download>Baixar .torrent</a>`);
@@ -411,7 +421,7 @@
       const att = (d.attachments || []).filter((a) => a.kind !== "torrent").slice(0, 12);
       $("#dl-files").innerHTML = att.map((a) => `<li><a href="${esc(a.url)}" title="${esc(a.filename)}">${esc(a.filename)}</a><span class="k">${esc(a.kind || "")}${a.size ? ` · ${fmtB(a.size)}` : ""}</span></li>`).join("");
       $("#dl-att").hidden = !att.length;
-    } catch { noLinks("Esta versão online não publica magnets nem anexos. Abra o tópico no fórum para baixar."); }
+    } catch { await staticLinks(); }
   }
   const openSheet = () => { document.body.classList.add("show-filters"); if (panelDirty) renderPanel(); }, closeSheet = () => document.body.classList.remove("show-filters");
 
