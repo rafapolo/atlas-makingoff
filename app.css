@@ -174,5 +174,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, canvas:focus-vi
   .detail .tag { padding: 4px 11px; }
   .tip { display: none; }
 }
+/* alvos de toque ≥ 44 px no celular */
+@media (max-width: 860px) {
+  .only-narrow, .sheet-head .ghost { min-height: 44px; }
+  .detail .tag { min-height: 36px; display: inline-flex; align-items: center; }
+  .detail .files a { display: inline-block; padding: 8px 0; }
+  .chip button { min-width: 40px; min-height: 32px; }
+  .opt, .seedbtn { min-height: 44px; }
+}
 @media (max-width: 380px) { .seedbtn span { font-size: 10px; } .seedbtn small { font-size: 10px; } }
 @media (prefers-reduced-motion: reduce) { .panel, .backdrop, .detail .x, .detail .links a { transition: none; } .detail .dbody { scroll-behavior: auto; } }
