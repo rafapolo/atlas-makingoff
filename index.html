@@ -9,7 +9,7 @@
 <link rel="icon" href="img/favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="app.css?v=1790871128402">
+<link rel="stylesheet" href="app.css?v=1790899375713">
 <meta name="robots" content="noindex">
 </head>
 <body>
@@ -21,7 +21,30 @@
 </header>
 
 <main class="layout">
-  <aside id="detail" class="detail" aria-label="Detalhes do filme" hidden></aside>
+  <aside id="side" class="side" aria-label="Filme selecionado e filtros">
+    <section id="detail" class="detail" aria-label="Detalhes do filme" hidden></section>
+    <p id="pick-hint" class="pick-hint">Clique numa capa para ver o filme aqui.</p>
+    <div id="side-filters" class="side-filters">
+      <section class="sec view">
+        <h2>Parede</h2>
+        <div class="viewrow">
+          <label>Ordem
+            <select id="sort" aria-label="Ordenar a parede">
+              <option value="year_desc">Ano ↓ (mais novos)</option><option value="year_asc">Ano ↑ (mais antigos)</option>
+              <option value="seeds">Mais seeders</option><option value="size">Maior arquivo</option>
+              <option value="title">Título A–Z</option><option value="recent">Mais recentes no fórum</option><option value="random">Aleatório</option>
+            </select>
+          </label>
+          <label>Formato
+            <select id="aspect" aria-label="Formato da parede">
+              <option value="cinema">Cinema 2,39:1</option><option value="wide">Widescreen 16:9</option><option value="classic">Clássico 4:3</option>
+            </select>
+          </label>
+        </div>
+      </section>
+      <div id="filters-a"></div>
+    </div>
+  </aside>
   <section class="grid" id="grid" aria-label="Parede de capas">
     <canvas id="cv" role="img" aria-label="Parede com as capas de todos os filmes. Arraste para mover; roda do mouse ou pinça para aproximar."></canvas>
     <div id="tip" class="tip" hidden></div>
@@ -38,29 +61,12 @@
   </section>
 
   <div id="backdrop" class="backdrop"></div>
-  <aside id="panel" class="panel" aria-label="Filtros e detalhes">
+  <aside id="panel" class="panel" aria-label="Filtros">
     <div class="sheet-head"><span class="grab" aria-hidden="true"></span><button id="close-sheet" class="ghost" type="button">Fechar ×</button></div>
     <section class="sec activesec" id="activesec" hidden><h2>Filtros ativos</h2><div id="active" class="active"></div></section>
-    <section class="sec view">
-      <h2>Parede</h2>
-      <div class="viewrow">
-        <label>Ordem
-          <select id="sort" aria-label="Ordenar a parede">
-            <option value="year_desc">Ano ↓ (mais novos)</option><option value="year_asc">Ano ↑ (mais antigos)</option>
-            <option value="seeds">Mais seeders</option><option value="size">Maior arquivo</option>
-            <option value="title">Título A–Z</option><option value="recent">Mais recentes no fórum</option><option value="random">Aleatório</option>
-          </select>
-        </label>
-        <label>Formato
-          <select id="aspect" aria-label="Formato da parede">
-            <option value="cinema">Cinema 2,39:1</option><option value="wide">Widescreen 16:9</option><option value="classic">Clássico 4:3</option>
-          </select>
-        </label>
-      </div>
-    </section>
     <div id="filters"></div>
   </aside>
 </main>
-<script src="app.js?v=1790871128402"></script>
+<script src="app.js?v=1790899375713"></script>
 </body>
 </html>

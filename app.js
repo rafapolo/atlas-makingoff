@@ -16,7 +16,11 @@
   let D, N = 0, C, PC;                   // dados, nº de filmes, colunas de dados, colunas da grade de sprites
   const GROUPS = { c: "Países", g: "Gêneros", d: "Diretores", l: "Idiomas", u: "Quem postou" };
   const SEED = ["verde", "amarelo", "laranja", "vermelho", "sem"];
-  const SEEDLAB = { verde: "5 ou mais seeders", amarelo: "2 a 4 seeders", laranja: "1 seeder", vermelho: "0 seeders", sem: "sem dados de seeders" };
+  const SEEDLAB = { verde: "3 ou mais seeders confirmados", amarelo: "2 seeders confirmados", laranja: "1 seeder confirmado", vermelho: "nenhum seeder respondeu", sem: "sem dados de seeders" };
+  // seeders confirmados (C.sv: peers que responderam ao handshake e têm o arquivo inteiro); filme não testado usa o número anunciado pelos trackers
+  const verified = (i) => C.sv && C.sv[i] !== null && C.sv[i] !== undefined;
+  const seedKind = (i) => { if (verified(i)) { const v = C.sv[i]; return v >= 3 ? "verde" : v === 2 ? "amarelo" : v === 1 ? "laranja" : "vermelho"; }
+    const s = C.s[i]; return s === null ? "sem" : s >= 5 ? "verde" : s >= 2 ? "amarelo" : s === 1 ? "laranja" : "vermelho"; };
   const SEEDNAME = { verde: "verde", amarelo: "amarelo", laranja: "laranja", vermelho: "vermelho", sem: "sem dados" };
   const SIZES = [["<700 MB", 0, 700], ["0,7–2 GB", 700, 2048], ["2–6 GB", 2048, 6144], [">6 GB", 6144, 1e12]];
   const FLAGS = [["cover", 1, "Tem capa"], ["magnet", 2, "Tem magnet"], ["sub", 4, "Tem legenda"], ["co", 8, "Co-produção (2+ países)"], ["legacy", 16, "Só no legado de 2014"]];
@@ -249,7 +253,7 @@
   const SEEDI = { verde: 0, amarelo: 1, laranja: 2, vermelho: 3, sem: 4 };
   function classify() {
     seedClass = new Array(N); seedIdx = new Uint8Array(N);
-    for (let i = 0; i < N; i++) { const s = C.s[i], k = s === null ? "sem" : s >= 5 ? "verde" : s >= 2 ? "amarelo" : s === 1 ? "laranja" : "vermelho"; seedClass[i] = k; seedIdx[i] = SEEDI[k]; }
+    for (let i = 0; i < N; i++) { const k = seedKind(i); seedClass[i] = k; seedIdx[i] = SEEDI[k]; }
     normText = C.t.map((t, i) => norm(t + " " + C.o[i] + " " + C.d[i].map((d) => D.dict.d[0][d]).join(" ")));
     for (const g of FACETS) {
       const off = new Int32Array(N + 1); let tot = 0; for (let i = 0; i < N; i++) { off[i] = tot; tot += C[g][i].length; } off[N] = tot;
@@ -296,7 +300,7 @@
     for (let i = 0; i < N; i++) {
       const f = fail[i]; if (f !== 0 && (f & (f - 1)) !== 0) continue;
       const only = f === 0 ? null : ONLY[f];
-      if (f === 0 && (C.s[i] ?? 0) >= 1) withSeedN++;
+      if (f === 0 && seedIdx[i] <= SEEDI.laranja) withSeedN++;
       for (let gi = 0; gi < 4; gi++) { const g = FACETS[gi]; if (only && only !== g) continue; const { off, val } = csr[g], cg = counts[g]; for (let j = off[i], e = off[i + 1]; j < e; j++) cg[val[j]]++; }
       if ((!only || only === "u") && uCol[i] >= 0) counts.u[uCol[i]]++;
       if (!only || only === "seed") counts.seed[seedIdx[i]]++;
@@ -307,7 +311,7 @@
   }
 
   // ---------- painel de filtros ----------
-  const filtersEl = $("#filters");
+  const filtersEl = $("#filters"), filtersA = $("#filters-a"), sideFilters = $("#side-filters");   // direita: facetas em lista; esquerda: filtros compactos
   const short = (n) => (n >= 10000 ? Math.round(n / 1000) + " mil" : fmt(n));
   function opt(label, n, on, attrs) { return `<button class="opt${n === 0 && !on ? " zero" : ""}" type="button" aria-pressed="${on}" ${attrs}><span class="box"></span><span class="n">${esc(label)}</span><span class="c">${fmt(n)}</span></button>`; }
   function facet(g) {
@@ -322,10 +326,10 @@
       <div class="opts">${ids.map((i) => opt(names[i], cnt[i], sel.has(i), `data-g="${g}" data-i="${i}"`)).join("")}${total > limit ? `<button class="opt" type="button" data-more="${g}"><span></span><span class="n">ver mais (${fmt(total - limit)})</span><span></span></button>` : ""}</div></section>`;
   }
   function renderFilters() {
-    const keepScroll = filtersEl.parentElement.scrollTop, focus = document.activeElement?.dataset?.search;
+    const keepScroll = [filtersEl.parentElement.scrollTop, sideFilters.scrollTop], focus = document.activeElement?.dataset?.search;
     // seeders: as cinco cores numa linha só (nome curto + contagem; a descrição completa fica no title)
-    const seedWhen = D.seedsAt ? new Date(D.seedsAt).toLocaleDateString("pt-BR") : null;
-    const seed = `<section class="sec"><h2>Seeders</h2><div class="seedrow">${SEED.map((k) => `<button class="seedbtn" type="button" data-seed="${k}" aria-pressed="${S.seed.has(k)}" title="${SEEDLAB[k]} · ${fmt(counts.seed[SEEDI[k]])} filmes" aria-label="${SEEDLAB[k]}: ${fmt(counts.seed[SEEDI[k]])} filmes"><i style="background:${colors[k]}"></i><span>${SEEDNAME[k]}</span><small>${short(counts.seed[SEEDI[k]])}</small></button>`).join("")}</div><p class="legend">A cor sob cada capa é quantas pessoas estão compartilhando o arquivo agora (seeders)${seedWhen ? `, medido nos trackers em ${seedWhen}` : ""}. Verde: 5 ou mais. Amarelo: 2 a 4. Laranja: só 1, o filme pode sumir. Vermelho: ninguém, provavelmente não baixa. Cinza: sem dados, em geral porque o tópico não tem torrent.</p></section>`;
+    const seedWhen = D.peersAt || D.seedsAt ? new Date(D.peersAt || D.seedsAt).toLocaleDateString("pt-BR") : null;
+    const seed = `<section class="sec"><h2>Seeders</h2><div class="seedrow">${SEED.map((k) => `<button class="seedbtn" type="button" data-seed="${k}" aria-pressed="${S.seed.has(k)}" title="${SEEDLAB[k]} · ${fmt(counts.seed[SEEDI[k]])} filmes" aria-label="${SEEDLAB[k]}: ${fmt(counts.seed[SEEDI[k]])} filmes"><i style="background:${colors[k]}"></i><span>${SEEDNAME[k]}</span><small>${short(counts.seed[SEEDI[k]])}</small></button>`).join("")}</div><p class="legend">A cor sob cada capa é quantos seeders <b>confirmados</b> o filme tem: pessoas que responderam a uma conexão de verdade e têm o arquivo inteiro${seedWhen ? ` (testado em ${seedWhen})` : ""}. Os trackers anunciam mais, mas muitos estão offline ou inacessíveis. Verde: 3 ou mais. Amarelo: 2. Laranja: só 1, o filme pode sumir. Vermelho: nenhum respondeu; talvez baixe se a sua porta estiver aberta e você esperar. Cinza: sem dados, em geral porque o tópico não tem torrent.</p></section>`;
     const decs = []; for (let d = Math.floor(D._ymin / 10) * 10; d <= Math.floor(D._ymax / 10) * 10; d += 10) decs.push(d);
     const mx = Math.max(1, ...decs.map((d) => counts.years.get(d) ?? 0));
     const year = `<section class="sec"><h2>Ano</h2><div class="hist">${decs.map((d) => `<button type="button" data-dec="${d}" title="${d}s · ${fmt(counts.years.get(d) ?? 0)} filmes" aria-label="Década de ${d}" aria-pressed="${S.y0 === d && S.y1 === d + 9}" style="height:${Math.max(4, Math.round(54 * (counts.years.get(d) ?? 0) / mx))}px"></button>`).join("")}</div>
@@ -333,8 +337,9 @@
       <div class="yearrow"><input type="number" inputmode="numeric" id="y0" placeholder="de" value="${S.y0 ?? ""}" min="1880" max="2030" aria-label="Ano inicial"><input type="number" inputmode="numeric" id="y1" placeholder="até" value="${S.y1 ?? ""}" min="1880" max="2030" aria-label="Ano final"></div></section>`;
     const size = `<section class="sec"><h2>Tamanho do arquivo</h2><div class="opts">${SIZES.map(([l], i) => opt(l, counts.size[i], S.size.has(i), `data-size="${i}"`)).join("")}</div></section>`;
     const flags = `<section class="sec"><h2>Outros</h2><div class="opts">${FLAGS.map(([k, , l]) => opt(l, counts.flags[k], S.flags.has(k), `data-flag="${k}"`)).join("")}</div></section>`;
-    filtersEl.innerHTML = facet("c") + seed + facet("d") + facet("g") + year + facet("l") + size + flags + facet("u");
-    filtersEl.parentElement.scrollTop = keepScroll;
+    filtersEl.innerHTML = facet("c") + facet("d") + facet("g") + facet("l") + facet("u");
+    filtersA.innerHTML = seed + year + size + flags;
+    filtersEl.parentElement.scrollTop = keepScroll[0]; sideFilters.scrollTop = keepScroll[1];
     if (focus) { const el = filtersEl.querySelector(`[data-search="${focus}"]`); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }
   }
   function renderActive() {
@@ -357,8 +362,7 @@
   // ---------- detalhes ----------
   const detailEl = $("#detail"); let detailId = -1; const magShards = {};
   const EXT = (i) => D.exts[C.cx[i]] || "webp";
-  const detailShift = () => (matchMedia("(max-width: 860px)").matches ? 0 : 160);   // metade da largura do cartão (320 px)
-  function focusFilm(i) { const kk = posOf[i]; goal.k = clamp(Math.max(goal.k, 150 / PH), fitK * 0.7, K_MAX); goal.x = (kk % wall.cols) * PW + PW / 2 - detailShift() / goal.k; goal.y = ((kk / wall.cols) | 0) * PH + PH / 2; velocity.x = velocity.y = 0; }
+  function focusFilm(i) { const kk = posOf[i]; goal.k = clamp(Math.max(goal.k, 150 / PH), fitK * 0.7, K_MAX); goal.x = (kk % wall.cols) * PW + PW / 2; goal.y = ((kk / wall.cols) | 0) * PH + PH / 2; velocity.x = velocity.y = 0; }
   /** capa do cartão quando não há arquivo grande (site público): a miniatura do atlas ampliada; refina quando a página de sprites carrega */
   function coverFromAtlas(i) {
     const cn = document.createElement("canvas"); cn.className = "cover"; cn.width = 200; cn.height = 300; cn.setAttribute("role", "img"); cn.setAttribute("aria-label", `Capa de ${C.t[i]}`);
@@ -383,14 +387,15 @@
     const fmtMB = (mb) => (mb >= 1024 ? (mb / 1024).toFixed(1).replace(".", ",") + " GB" : mb + " MB");
     const fmtB = (b) => (b >= 1048576 ? (b / 1048576).toFixed(1).replace(".", ",") + " MB" : b >= 1024 ? Math.round(b / 1024) + " KB" : b + " B");
     const row = (label, html) => `<dt>${label}</dt><dd>${html}</dd>`;
-    const seedTxt = C.s[i] === null ? "sem dados" : `<b>${C.s[i]}</b> seeder${C.s[i] === 1 ? "" : "s"}${lc !== null ? ` · ${lc} leecher${lc === 1 ? "" : "s"}` : ""}`;
+    const seedTxt = verified(i) ? `<span><b>${C.sv[i]}${C.sv[i] >= 5 ? "+" : ""}</b> confirmado${C.sv[i] === 1 ? "" : "s"}${C.s[i] ? ` de ${C.s[i]}` : ""}</span>`
+      : C.s[i] === null ? "sem dados" : `<b>${C.s[i]}</b> seeder${C.s[i] === 1 ? "" : "s"}${lc !== null ? ` · ${lc} leecher${lc === 1 ? "" : "s"}` : ""}`;
     document.body.classList.add("has-detail"); detailEl.hidden = false;
     // o botão fechar fica fora da área que rola (sempre visível); o conteúdo rola em .dbody
     detailEl.innerHTML = `<button class="x" type="button" id="close-detail" aria-label="Fechar" title="Fechar (Esc)"><span aria-hidden="true">×</span></button>
       <div class="dbody">
       <div class="head">${C.f[i] & 1 ? `<img class="cover" src="files/capas/${C.id[i]}.${EXT(i)}" alt="Capa de ${esc(C.t[i])}" width="200" height="300">` : ""}
         <div class="titles"><h3>${esc(C.t[i])}</h3>${C.o[i] ? `<p class="orig">${esc(C.o[i])}</p>` : ""}</div>
-        <div class="facts">${C.y[i] ? `<span class="year">${C.y[i]}</span>` : ""}<span class="health" title="Saúde do torrent"><i style="background:var(--${sc})"></i>${seedTxt}</span>${C.z[i] ? `<span class="size">${fmtMB(C.z[i])}${C.n[i] > 1 ? ` · ${C.n[i]} arq.` : ""}</span>` : ""}</div></div>
+        <div class="facts">${C.y[i] ? `<span class="year">${C.y[i]}</span>` : ""}<span class="health" title="${verified(i) ? `Seeders confirmados: responderam a uma conexão e têm o arquivo inteiro.${C.s[i] ? ` Os trackers anunciam ${C.s[i]}, mas isso inclui quem está offline ou inacessível.` : ""}` : "Saúde do torrent"}"><i style="background:var(--${sc})"></i>${seedTxt}</span>${C.z[i] ? `<span class="size">${fmtMB(C.z[i])}${C.n[i] > 1 ? ` · ${C.n[i]} arq.` : ""}</span>` : ""}</div></div>
       <div class="links" id="dl-links"><a class="topic" href="https://www.makingoff.org/topicos/${C.id[i]}/" target="_blank" rel="noopener">Tópico no fórum</a>${C.im[i] ? `<a href="https://www.imdb.com/title/${C.im[i]}/" target="_blank" rel="noopener">IMDb</a>` : ""}</div>
       <dl>${row("Países", tags("c"))}${row("Direção", tags("d"))}${row("Gêneros", tags("g"))}${row("Idiomas", tags("l"))}
       ${row("Postado por", C.u[i] >= 0 ? `<button class="tag" type="button" data-g="u" data-i="${C.u[i]}">${esc(D.dict.u[0][C.u[i]])}</button>` : "—")}</dl>
@@ -454,7 +459,7 @@
     const k = pick(px, py); if (k !== hoverK) { hoverK = k; kick(); }
     cv.style.cursor = k >= 0 ? "pointer" : "grab";
     if (k < 0) { tip.hidden = true; return; } const i = layoutOrder[k];
-    tip.innerHTML = `<b>${esc(C.t[i])}</b><span class="m">${C.y[i] || "s/ano"} · ${C.c[i].slice(0, 3).map((x) => esc(D.dict.c[0][x])).join(" × ") || "—"}</span><br><span class="m">${C.s[i] === null ? "sem dados de seeders" : C.s[i] + " seeders"}</span>`;
+    tip.innerHTML = `<b>${esc(C.t[i])}</b><span class="m">${C.y[i] || "s/ano"} · ${C.c[i].slice(0, 3).map((x) => esc(D.dict.c[0][x])).join(" × ") || "—"}</span><br><span class="m">${verified(i) ? `${C.sv[i]}${C.sv[i] >= 5 ? "+" : ""} seeders confirmados` : C.s[i] === null ? "sem dados de seeders" : C.s[i] + " seeders"}</span>`;
     tip.hidden = false; let tx = px + 16, ty = py + 16; if (tx + 290 > W) tx = px - 296; tip.style.left = tx + "px"; tip.style.top = ty + "px";
   });
   const up = (e) => {
@@ -497,7 +502,7 @@
   const relayout = () => { computeWall(); resize(); fit(); if (selI >= 0) focusFilm(selI); markDirty(); composeWall(); updateMask(); kick(); };
   const toggle = (set, v) => (set.has(v) ? set.delete(v) : set.add(v));
 
-  filtersEl.addEventListener("click", (e) => {
+  const onFilterClick = (e) => {
     const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.g && b.dataset.i !== undefined) toggle(S.sel[b.dataset.g], +b.dataset.i);
     else if (b.dataset.seed) toggle(S.seed, b.dataset.seed);
@@ -508,17 +513,22 @@
     else if (b.dataset.all !== undefined) S.all = b.dataset.all === "1";
     else return;
     refresh();
-  });
+  };
+  filtersEl.addEventListener("click", onFilterClick); filtersA.addEventListener("click", onFilterClick);
   detailEl.addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
     if (b.id === "close-detail") { closeDetail(); return; }
     if (b.dataset.g) { S.sel[b.dataset.g].add(+b.dataset.i); refresh(); }
   });
-  filtersEl.addEventListener("input", (e) => {
+  const onFilterInput = (e) => {
     const t = e.target;
     if (t.dataset.search) { S.search[t.dataset.search] = t.value; renderFilters(); return; }
     if (t.id === "y0" || t.id === "y1") { clearTimeout(t._t); t._t = setTimeout(() => { S.y0 = $("#y0").value ? +$("#y0").value : null; S.y1 = $("#y1").value ? +$("#y1").value : null; refresh(); }, 150); }
-  });
+  };
+  filtersEl.addEventListener("input", onFilterInput); filtersA.addEventListener("input", onFilterInput);
+  // celular: os filtros da coluna esquerda vão para a gaveta de filtros (logo após os filtros ativos); no desktop voltam para a esquerda
+  const narrowMQ = matchMedia("(max-width: 860px)"), placeSide = () => { if (narrowMQ.matches) $("#activesec").after(sideFilters); else $("#side").append(sideFilters); };
+  placeSide(); narrowMQ.addEventListener?.("change", placeSide);
   $("#active").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; if (b.id === "clear-all") return clearAll(); if (b.dataset.x !== undefined) { $("#active")._chips[+b.dataset.x][1](); refresh(); } });
   function clearAll() { for (const g in S.sel) S.sel[g].clear(); S.seed.clear(); S.size.clear(); S.flags.clear(); S.y0 = S.y1 = null; S.q = ""; $("#q").value = ""; S.all = false; refresh(); }
   $("#clear-empty").addEventListener("click", clearAll);
